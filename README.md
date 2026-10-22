@@ -56,6 +56,16 @@ python3 fix_dates.py
 
 ---
 
+## ⏱️ Execution Time & Performance Considerations
+
+Please be aware that IMAP operations on large historical email archives are **time-intensive**:
+
+* **Estimated Speed:** Expect roughly **1 to 3 hours per Gigabyte** (or per ~10,000 emails), depending on your account size and server limits.
+* **Why does it take so long?** It is not strictly limited by your local internet speed. Major providers (like Google and Apple) enforce strict **IMAP Rate Limits (Throttling)** to prevent server overload. Every single folder and email header requires direct server-side verification.
+* **Universal Issue (Not just German/Apple):** While this repository focuses on Apple-to-Gmail migrations, folder encoding issues with mUTF-7 affect **all non-ASCII languages** (e.g., Spanish accents like `ñ`, `á`, `é`, French, Cyrillic, etc.) and apply to almost any cross-provider IMAP migration.
+* **Recommendation:** Let the scripts run uninterrupted in a background terminal session.
+---
+
 ## 💡 Troubleshooting & AI Assistance
 
 If you encounter unexpected errors, missing modules, or server timeouts while running these scripts:
