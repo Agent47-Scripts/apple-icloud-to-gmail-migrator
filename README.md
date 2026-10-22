@@ -19,7 +19,7 @@
 For security reasons, modern email providers do not allow standard account passwords for automated script access. You need **App-Specific Passwords**.
 
 ### Target Account (e.g., Google Workspace / Gmail)
-1. Go to your Google Account settings (**Security** $\rightarrow$ **2-Step Verification** must be enabled).
+1. Go to your Google Account settings (**Security** -> **2-Step Verification** must be enabled).
 2. Scroll down to **App passwords**.
 3. Create a new app password (named e.g. "IMAP Migration"), copy the 16-character code, and use it as your target password.
 
@@ -38,3 +38,31 @@ Set your target credentials securely in your Linux terminal before running any s
 ```bash
 export TGT_USER="your-email@gmail.com"
 export TGT_PASS="your-16-digit-app-password"
+```
+
+### 2. Purge Corrupted mUTF-7 Folders
+Run the duplicate cleanup script first to remove redundant folder containers:
+
+```bash
+python3 force_delete_dupes.py
+```
+
+### 3. Restore Historical Mail Timestamps
+After the folder structure is clean, execute the timestamp repair script:
+
+```bash
+python3 fix_dates.py
+```
+
+---
+
+## 💡 Troubleshooting & AI Assistance
+
+If you encounter unexpected errors, missing modules, or server timeouts while running these scripts:
+* **Don't hesitate to use an AI (like Gemini or ChatGPT):** Paste the error message and the respective script into the chat. 
+* These scripts are intentionally written in a clean, modular, and compact format specifically so that AIs can easily read, debug, and adapt them for your individual mailbox structure within seconds.
+
+---
+
+## 📜 License
+Licensed under the [MIT License](LICENSE). Free to use, adapt, and share.
