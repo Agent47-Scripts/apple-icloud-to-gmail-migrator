@@ -15,6 +15,7 @@ Description:
   Key Features:
   - Preserves original internal timestamps (INTERNALDATE) during transfer.
   - Automatically handles custom IMAP folder structures.
+  - Robust exception handling for empty/special IMAP responses.
   - Secure credential handling via system environment variables.
 ==============================================================================
 """
@@ -70,7 +71,11 @@ if status == "OK":
         tgt.create(f'"{folder_name}"')
         
         # Search for all messages within the current folder
-        _, msg_nums = src.search(None, "ALL")
+        search_status, msg_nums = src.search(None, "ALL")
+        if search_status != "OK" or not msg_nums or not msg_nums[0]:
+            print("  -> 0 messages found.")
+            continue
+
         nums = msg_nums[0].split()
         print(f"  -> Found {len(nums)} messages.")
 
