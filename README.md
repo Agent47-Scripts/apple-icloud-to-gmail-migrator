@@ -1,17 +1,16 @@
 # Apple iCloud Mail to Gmail / Workspace Migration Tools
 
-> **Background & Purpose:** I created these scripts after going through the painful process of migrating a massive, decades-old Apple Mail / iCloud IMAP archive to Google Workspace on Linux (Ubuntu Budgie). My goal is to save you the countless hours of research, trial-and-error, and frustrating roadblocks I had to go through.
+> **Background & Purpose:** I created this all-in-one tool after going through the painful process of migrating a massive, decades-old Apple Mail / iCloud IMAP archive to Google Workspace on Linux (Ubuntu Budgie). My goal is to save you the countless hours of research, trial-and-error, and frustrating roadblocks I had to go through. 
 
 ---
 
 ## 🚀 Key Features & Problem Solvers
 
-* **Main Migration Engine (`sync_icloud.py`):** Robust, interruption-tolerant IMAP migration script for transferring mail archives from Apple iCloud to Google Workspace / Gmail.
-* **mUTF-7 Folder Encoding Fix:** Apple Mail uses specialized mUTF-7 encoding for non-ASCII characters and umlauts (`ä`, `ö`, `ü`, `ß`). Standard IMAP tools often create duplicated, corrupted folder trees.
-* **Safe Duplicate Purging (`force_delete_dupes.py`):** Identifies and deletes orphan mUTF-7 duplicate folder structures directly on the target IMAP server without losing unique messages.
-* **Historical Timestamp Fixer (`fix_dates.py`):** Re-applies the original internal `Date:` header to historical emails, ensuring correct chronological order in the target web interface.
+* **All-in-One Pipeline (`migrate_all.py`):** Handles synchronization, mUTF-7 duplicate purging, and historical timestamp fixing in a single, streamlined execution flow.
+* **Resumable & Fault-Tolerant:** Interrupted by an IMAP timeout or network drop? Simply re-run the script. It automatically detects existing messages via `Message-ID` checking and resumes exactly where it left off.
+* **mUTF-7 Folder Encoding Fix:** Apple Mail uses specialized mUTF-7 encoding for non-ASCII characters and umlauts (`ä`, `ö`, `ü`, `ß`). Standard IMAP tools often create duplicated, corrupted folder trees, which are automatically cleaned up.
+* **Historical Timestamp Fixer:** Re-applies the original internal `Date:` header to historical emails, ensuring correct chronological order in the target web interface.
 * **Security First (No Hardcoded Credentials):** Credentials are passed strictly via system environment variables (`os.getenv`) — no hardcoded passwords in the source code.
-* **Interruption Tolerant:** Designed to be safely re-run if network or server connections drop out.
 
 ---
 
@@ -31,10 +30,10 @@ For security reasons, modern email providers do not allow standard account passw
 
 ---
 
-## ⚙️ Usage Workflow
+## ⚙️ Usage
 
 ### 1. Set Environment Variables
-Set your source and target credentials securely in your Linux terminal before running any commands:
+Set your source and target credentials securely in your Linux terminal before running the script:
 
 ```bash
 # Source Account (Apple iCloud)
@@ -46,25 +45,11 @@ export TGT_USER="your-email@gmail.com"
 export TGT_PASS="your-google-app-password"
 ```
 
-### 2. Run Main Sync Script
-Execute the primary transfer script to copy folders and email archives from iCloud to Gmail:
+### 2. Run the All-in-One Migration Pipeline
+Execute the main script to start the transfer, cleanup, and timestamp restoration:
 
 ```bash
-python3 sync_icloud.py
-```
-
-### 3. Purge Corrupted mUTF-7 Folders
-Run the duplicate cleanup script to remove redundant or orphaned mUTF-7 folder structures:
-
-```bash
-python3 force_delete_dupes.py
-```
-
-### 4. Restore Historical Mail Timestamps
-After the folder structure is clean, execute the timestamp repair script to fix internal email web display dates:
-
-```bash
-python3 fix_dates.py
+python3 migrate_all.py
 ```
 
 ---
@@ -76,18 +61,17 @@ Please be aware that IMAP operations on large historical email archives are **ti
 * **Estimated Speed:** Expect roughly **1 to 3 hours per Gigabyte** (or per ~10,000 emails), depending on your account size and server limits.
 * **Why does it take so long?** It is not strictly limited by your local internet speed. Major providers (like Google and Apple) enforce strict **IMAP Rate Limits (Throttling)** to prevent server overload. Every single folder and email header requires direct server-side verification.
 * **Universal Issue (Not just German/Apple):** While this repository focuses on Apple-to-Gmail migrations, folder encoding issues with mUTF-7 affect **all non-ASCII languages** (e.g., Spanish accents like `ñ`, `á`, `é`, French, Cyrillic, etc.) and apply to almost any cross-provider IMAP migration.
-* **Recommendation:** Let the scripts run uninterrupted in a background terminal session.
+* **Recommendation:** Let the script run uninterrupted in a background terminal session. If it drops, just re-run it—thanks to resume-logic, it picks up right where it stopped.
 
 ---
 
 ## 💡 Troubleshooting & AI Assistance
 
 If you encounter unexpected errors, missing modules, or server timeouts while running these scripts:
-* **Don't hesitate to use an AI (like Gemini or ChatGPT):** Paste the error message and the respective script into the chat.
+* **Don't hesitate to use an AI (like Gemini or ChatGPT):** Paste the error message and the respective script into the chat. 
 * These scripts are intentionally written in a clean, modular, and compact format specifically so that AIs can easily read, debug, and adapt them for your individual mailbox structure within seconds.
 
 ---
 
 ## 📜 License
-
 Licensed under the [MIT License](LICENSE). Free to use, adapt, and share.
