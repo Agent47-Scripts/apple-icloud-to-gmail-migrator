@@ -9,9 +9,13 @@ Repository:  Agent47-Scripts/Apple-Mail-to-Google-Workspace-Migration
 License:     MIT License
 
 Description:
-  All-in-one script to migrate full folder hierarchies and emails from Apple 
-  iCloud Mail to Google Workspace or Gmail over IMAP. Restores original email 
-  timestamps (INTERNALDATE) during transfer.
+  All-in-one Python script to migrate full folder hierarchies and email archives 
+  from Apple iCloud Mail to Google Workspace or Gmail over IMAP. 
+  
+  Key Features:
+  - Preserves original internal timestamps (INTERNALDATE) during transfer.
+  - Automatically handles custom IMAP folder structures.
+  - Secure credential handling via system environment variables.
 ==============================================================================
 """
 
@@ -19,52 +23,58 @@ import os
 import imaplib
 import email
 
+# Retrieve authentication credentials from environment variables
 SRC_USER = os.getenv("SRC_USER")
 SRC_PASS = os.getenv("SRC_PASS")
 TGT_USER = os.getenv("TGT_USER")
 TGT_PASS = os.getenv("TGT_PASS")
 
+# Validate environment variables
 if not all([SRC_USER, SRC_PASS, TGT_USER, TGT_PASS]):
-    print("FEHLER: SRC_USER, SRC_PASS, TGT_USER oder TGT_PASS fehlen!")
-    print("Bitte vorher 'export SRC_USER=...', etc. im Terminal ausführen.")
+    print("ERROR: Missing required environment variables!")
+    print("Please set SRC_USER, SRC_PASS, TGT_USER, and TGT_PASS before running this script.")
     exit(1)
 
-print(f"[*] Verbinde mit iCloud ({SRC_USER})...")
+# Connect to source server (Apple iCloud IMAP)
+print(f"[*] Connecting to Apple iCloud IMAP ({SRC_USER})...")
 src = imaplib.IMAP4_SSL("imap.mail.me.com")
 src.login(SRC_USER, SRC_PASS)
 
-print(f"[*] Verbinde mit Gmail ({TGT_USER})...")
+# Connect to target server (Google Workspace / Gmail IMAP)
+print(f"[*] Connecting to Gmail IMAP ({TGT_USER})...")
 tgt = imaplib.IMAP4_SSL("imap.gmail.com")
 tgt.login(TGT_USER, TGT_PASS)
 
-print("\n[=== PHASE 1: Mail Sync ===]")
+print("\n[=== PHASE 1: Executing Mail Synchronization ===]")
 status, mailboxes = src.list()
 
 if status == "OK":
     for mb in mailboxes:
+        # Extract folder name from IMAP response
         raw_name = mb.decode().split(' "/" ')[-1].strip()
         folder_name = raw_name.strip('"')
         
-        # System-Ordner überspringen
+        # Skip system folders and trash
         if folder_name.lower() in ["junk", "trash", "deleted messages", "notes"]:
             continue
 
-        print(f"\n[*] Verarbeite Ordner: {folder_name}")
+        print(f"\n[*] Processing folder: {folder_name}")
         
-        # Quell-Ordner selektieren
+        # Select source folder in read-only mode
         status_src, _ = src.select(f'"{folder_name}"', readonly=True)
         if status_src != "OK":
-            print(f"  -> Fehler beim Öffnen auf iCloud, überspringe.")
+            print(f"  -> Failed to open folder on iCloud. Skipping.")
             continue
 
-        # Ziel-Ordner erstellen
+        # Create corresponding target folder on Gmail
         tgt.create(f'"{folder_name}"')
         
-        # Mails suchen
+        # Search for all messages within the current folder
         _, msg_nums = src.search(None, "ALL")
         nums = msg_nums[0].split()
-        print(f"  -> {len(nums)} Mails gefunden.")
+        print(f"  -> Found {len(nums)} messages.")
 
+        # Iterate through messages and append to target IMAP server
         for num in nums:
             _, data = src.fetch(num, "(RFC822 INTERNALDATE)")
             if not data or not data[0]:
@@ -87,8 +97,10 @@ if status == "OK":
                 try:
                     tgt.append(f'"{folder_name}"', None, internal_date, raw_email)
                 except Exception as e:
-                    print(f"     Fehler beim Kopieren einer Mail: {e}")
+                    print(f"     Failed to append message: {e}")
 
-print("\n[+] Migration erfolgreich abgeschlossen!")
+print("\n[+] Migration process successfully completed!")
+
+# Close connections cleanly
 src.logout()
 tgt.logout()
