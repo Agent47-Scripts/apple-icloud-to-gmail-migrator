@@ -1,8 +1,8 @@
 # Apple iCloud Mail to Google Workspace Migration Tool
 
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Donate-orange.svg)](https://www.buymeacoffee.com/agent47.scripts)
+<a href="https://www.buymeacoffee.com/agent47.scripts" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Donate-orange.svg" alt="Buy Me a Coffee"></a>
 
-A resilient, single-threaded Python tool designed to migrate email archives from Apple iCloud Mail to Google Workspace / Gmail via IMAP. 
+A resilient, single-threaded Python tool designed to migrate email archives from Apple iCloud Mail to Google Workspace / Gmail via IMAP.
 
 It preserves original message timestamps (`INTERNALDATE`), decodes mUTF-7 folder structures accurately, and implements auto-reconnect logic with duplicate prevention to handle server throttling reliably.
 
@@ -17,13 +17,13 @@ Both Apple iCloud and Google Workspace require **App-Specific Passwords** when a
 ### How to Generate App-Specific Passwords:
 
 1. **Apple iCloud Mail (Source):**
-   * Go to [Apple ID Account Management](https://appleid.apple.com/)
+   * Go to <a href="https://appleid.apple.com/" target="_blank" rel="noopener noreferrer">Apple ID Account Management</a>
    * Sign in > **Sign-In and Security** > **App-Specific Passwords**
    * Create a new password for this migration tool.
 
 2. **Google Workspace / Gmail (Target):**
-   * Ensure 2-Step Verification is enabled in your [Google Account Security Settings](https://myaccount.google.com/security)
-   * Go directly to [Google App Passwords](https://myaccount.google.com/apppasswords)
+   * Ensure 2-Step Verification is enabled in your <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer">Google Account Security Settings</a>
+   * Go directly to <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Google App Passwords</a>
    * Generate a dedicated password for "Mail" / "Custom Name".
 
 ---
