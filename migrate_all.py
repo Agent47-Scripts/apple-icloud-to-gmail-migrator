@@ -34,6 +34,9 @@ if not all([SRC_USER, SRC_PASS, TGT_USER, TGT_PASS]):
     print("ERROR: Missing required environment variables (SRC_USER, SRC_PASS, TGT_USER, TGT_PASS)!")
     sys.exit(1)
 
+# RESUME SETTING: Set to exact folder name to skip everything before it, or None to run all
+RESUME_FROM_FOLDER = "Ablage/Privates/Wohnung/Sky"
+
 # Limit for Gmail IMAP APPEND (approx 24.5 MB to be safe with encoding overhead)
 MAX_EMAIL_SIZE = 24.5 * 1024 * 1024
 
@@ -183,6 +186,7 @@ def migrate():
         return
 
     ignored_folders = {'[Gmail]', 'Junk', 'Trash', 'Deleted Messages', 'Drafts'}
+    skip_mode = True if RESUME_FROM_FOLDER else False
 
     for folder_info in folders:
         raw_name = folder_info.decode('latin1').split(' "/" ')
@@ -194,6 +198,13 @@ def migrate():
         
         if any(ign in decoded_folder for ign in ignored_folders):
             continue
+            
+        if skip_mode:
+            if decoded_folder == RESUME_FROM_FOLDER:
+                skip_mode = False
+            else:
+                print(f"  [-] Skipping folder: {decoded_folder}")
+                continue
             
         print(f"\n[*] Processing folder: {decoded_folder} (Raw IMAP: {raw_folder})")
         
@@ -234,7 +245,6 @@ def migrate():
                     internal_date = imaplib.Internaldate2tuple(msg_data[0][0])
                     msg = email.message_from_bytes(raw_email)
                     
-                    # Safe conversion to string prevents AttributeError on Header objects
                     raw_msg_id = msg.get("Message-ID")
                     if raw_msg_id:
                         msg_id = str(raw_msg_id).strip()
