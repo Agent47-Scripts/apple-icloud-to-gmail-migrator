@@ -1,101 +1,94 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Author: Agent47-Scripts
-Repository: apple-icloud-to-gmail-migrator
-Description: All-in-one, resume-capable migration utility from Apple iCloud to Gmail/Workspace.
-             Handles sync, mUTF-7 duplicate purging, and historical timestamp fixing in one flow.
+==============================================================================
+Apple iCloud Mail to Google Workspace / Gmail Migration Pipeline
+==============================================================================
+Author:      Tino Höhne
+Repository:  Agent47-Scripts/Apple-Mail-to-Google-Workspace-Migration
+License:     MIT License
+
+Description:
+  All-in-one script to migrate full folder hierarchies and emails from Apple 
+  iCloud Mail to Google Workspace or Gmail over IMAP. Restores original email 
+  timestamps (INTERNALDATE) during transfer.
+==============================================================================
 """
 
 import os
-import sys
 import imaplib
 import email
-from email.header import decode_header
-
-# Configuration via Environment Variables (Security First)
-SRC_HOST = "imap.mail.me.com"
-TGT_HOST = "imap.gmail.com"
 
 SRC_USER = os.getenv("SRC_USER")
 SRC_PASS = os.getenv("SRC_PASS")
 TGT_USER = os.getenv("TGT_USER")
 TGT_PASS = os.getenv("TGT_PASS")
 
-def validate_env():
-    missing = [var for var, val in [
-        ("SRC_USER", SRC_USER), ("SRC_PASS", SRC_PASS),
-        ("TGT_USER", TGT_USER), ("TGT_PASS", TGT_PASS)
-    ] if not val]
-    
-    if missing:
-        print(f"[-] Error: Missing required environment variables: {', '.join(missing)}")
-        print("[*] Please set them using: export SRC_USER='...' etc.")
-        sys.exit(1)
+if not all([SRC_USER, SRC_PASS, TGT_USER, TGT_PASS]):
+    print("FEHLER: SRC_USER, SRC_PASS, TGT_USER oder TGT_PASS fehlen!")
+    print("Bitte vorher 'export SRC_USER=...', etc. im Terminal ausführen.")
+    exit(1)
 
-def connect_imap(host, user, password):
-    try:
-        print(f"[*] Connecting to {host} as {user}...")
-        mail = imaplib.IMAP4_SSL(host)
-        mail.login(user, password)
-        print(f"[+] Successfully connected to {host}")
-        return mail
-    except Exception as e:
-        print(f"[-] Connection failed to {host}: {e}")
-        sys.exit(1)
+print(f"[*] Verbinde mit iCloud ({SRC_USER})...")
+src = imaplib.IMAP4_SSL("imap.mail.me.com")
+src.login(SRC_USER, SRC_PASS)
 
-def get_existing_message_ids(target_mail, folder_name):
-    """Fetches Message-IDs already present in target folder to enable resume/skip logic."""
-    existing_ids = set()
-    try:
-        target_mail.select(folder_name, readonly=True)
-        status, messages = target_mail.search(None, 'ALL')
-        if status == 'OK' and messages[0]:
-            # Fetch headers in batches or chunks for speed
-            for num in messages[0].split():
-                res, data = target_mail.fetch(num, '(BODY.PEEK[HEADER.FIELDS (Message-ID)])')
-                if res == 'OK':
-                    for response_part in data:
-                        if isinstance(response_part, tuple):
-                            msg = email.message_from_bytes(response_part[1])
-                            msg_id = msg.get('Message-ID')
-                            if msg_id:
-                                existing_ids.add(msg_id.strip())
-    except Exception as e:
-        print(f"[*] Note: Could not fetch existing IDs for {folder_name} (might be empty): {e}")
-    return existing_ids
+print(f"[*] Verbinde mit Gmail ({TGT_USER})...")
+tgt = imaplib.IMAP4_SSL("imap.gmail.com")
+tgt.login(TGT_USER, TGT_PASS)
 
-def run_migration():
-    validate_env()
-    
-    src_mail = connect_imap(SRC_HOST, SRC_USER, SRC_PASS)
-    tgt_mail = connect_imap(TGT_HOST, TGT_USER, TGT_PASS)
-    
-    # 1. Phase: Sync Folders & Messages with Resume Capability
-    print("\n[=== PHASE 1: Resumable Mail Sync ===]")
-    status, folders = src_mail.list()
-    if status != 'OK':
-        print("[-] Failed to list source folders.")
-        return
+print("\n[=== PHASE 1: Mail Sync ===]")
+status, mailboxes = src.list()
 
-    for folder in folders:
-        folder_line = folder.decode('utf-8', errors='ignore')
-        print(f"[*] Processing folder structure: {folder_line}")
-        # Folder mapping and message transfer loop goes here...
+if status == "OK":
+    for mb in mailboxes:
+        raw_name = mb.decode().split(' "/" ')[-1].strip()
+        folder_name = raw_name.strip('"')
+        
+        # System-Ordner überspringen
+        if folder_name.lower() in ["junk", "trash", "deleted messages", "notes"]:
+            continue
 
-    # 2. Phase: Purge mUTF-7 Duplicate Folders
-    print("\n[=== PHASE 2: Purging mUTF-7 Duplicate Folders ===]")
-    # Logic to identify and remove duplicate folder trees safely
-    print("[+] Duplicate folder cleanup completed.")
+        print(f"\n[*] Verarbeite Ordner: {folder_name}")
+        
+        # Quell-Ordner selektieren
+        status_src, _ = src.select(f'"{folder_name}"', readonly=True)
+        if status_src != "OK":
+            print(f"  -> Fehler beim Öffnen auf iCloud, überspringe.")
+            continue
 
-    # 3. Phase: Fix Historical Timestamps
-    print("\n[=== PHASE 3: Restoring Historical Timestamps ===]")
-    # Logic to re-apply internal Date headers for chronological order
-    print("[+] Timestamp restoration completed.")
+        # Ziel-Ordner erstellen
+        tgt.create(f'"{folder_name}"')
+        
+        # Mails suchen
+        _, msg_nums = src.search(None, "ALL")
+        nums = msg_nums[0].split()
+        print(f"  -> {len(nums)} Mails gefunden.")
 
-    src_mail.logout()
-    tgt_mail.logout()
-    print("\n[+] Migration pipeline successfully finished!")
+        for num in nums:
+            _, data = src.fetch(num, "(RFC822 INTERNALDATE)")
+            if not data or not data[0]:
+                continue
+            
+            raw_email = None
+            internal_date = None
+            
+            for response_part in data:
+                if isinstance(response_part, tuple):
+                    raw_email = response_part[1]
+                    for item in response_part:
+                        if isinstance(item, bytes) and b"INTERNALDATE" in item:
+                            try:
+                                internal_date = imaplib.Internaldate2tuple(item)
+                            except Exception:
+                                pass
 
-if __name__ == "__main__":
-    run_migration()
+            if raw_email:
+                try:
+                    tgt.append(f'"{folder_name}"', None, internal_date, raw_email)
+                except Exception as e:
+                    print(f"     Fehler beim Kopieren einer Mail: {e}")
+
+print("\n[+] Migration erfolgreich abgeschlossen!")
+src.logout()
+tgt.logout()
