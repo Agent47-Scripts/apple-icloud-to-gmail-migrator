@@ -1,6 +1,6 @@
 # Apple iCloud Mail to Gmail / Workspace Migration Tools
 
-> **Background & Purpose:** I created this all-in-one tool after going through the painful process of migrating a massive, decades-old Apple Mail / iCloud IMAP archive to Google Workspace on Linux (Ubuntu Budgie). My goal is to save you the countless hours of research, trial-and-error, and frustrating roadblocks I had to go through. 
+> **Background & Purpose:** I created this all-in-one tool after going through the process of migrating an Apple Mail / iCloud IMAP archive to Google Workspace on Linux (Ubuntu Budgie). My goal is to save you time, trial-and-error, and frustrating roadblocks.
 
 ---
 
@@ -14,19 +14,21 @@
 
 ---
 
-## 🔑 Prerequisites & Authentication (As of 2026)
+## 🔑 Prerequisites & Authentication
 
 For security reasons, modern email providers do not allow standard account passwords for automated script access. You need **App-Specific Passwords**.
 
 ### Target Account (e.g., Google Workspace / Gmail)
 1. Go to your Google Account settings (**Security** -> **2-Step Verification** must be enabled).
 2. Scroll down to **App passwords**.
-3. Create a new app password (named e.g. "IMAP Migration"), copy the 16-character code, and use it as your target password.
+3. Create a new app password (named e.g. "IMAP Migration").
+4. Copy the **16-digit code** (without spaces/hyphens, e.g. `abcd1234efgh5678`).
 
 ### Source Account (e.g., Apple iCloud)
 1. Go to your Apple ID account page (`appleid.apple.com`).
 2. Under **Sign-In and Security**, select **App-Specific Passwords**.
-3. Generate a password for this migration tool and keep it handy.
+3. Generate a password for this migration tool.
+4. Copy the **19-character code** (formatted in 4-character blocks separated by hyphens, e.g. `abcd-efgh-ijkl-mnop`).
 
 ---
 
@@ -36,13 +38,13 @@ For security reasons, modern email providers do not allow standard account passw
 Set your source and target credentials securely in your Linux terminal before running the script:
 
 ```bash
-# Source Account (Apple iCloud)
+# Source Account (Apple iCloud - 19 chars with hyphens)
 export SRC_USER="your-apple-id@icloud.com"
-export SRC_PASS="your-apple-app-password"
+export SRC_PASS="abcd-efgh-ijkl-mnop"
 
-# Target Account (Google Workspace / Gmail)
+# Target Account (Google Workspace / Gmail - 16 digits without spaces)
 export TGT_USER="your-email@gmail.com"
-export TGT_PASS="your-google-app-password"
+export TGT_PASS="abcd1234efgh5678"
 ```
 
 ### 2. Run the All-in-One Migration Pipeline
@@ -59,17 +61,17 @@ python3 migrate_all.py
 Please be aware that IMAP operations on large historical email archives are **time-intensive**:
 
 * **Estimated Speed:** Expect roughly **1 to 3 hours per Gigabyte** (or per ~10,000 emails), depending on your account size and server limits.
-* **Why does it take so long?** It is not strictly limited by your local internet speed. Major providers (like Google and Apple) enforce strict **IMAP Rate Limits (Throttling)** to prevent server overload. Every single folder and email header requires direct server-side verification.
-* **Universal Issue (Not just German/Apple):** While this repository focuses on Apple-to-Gmail migrations, folder encoding issues with mUTF-7 affect **all non-ASCII languages** (e.g., Spanish accents like `ñ`, `á`, `é`, French, Cyrillic, etc.) and apply to almost any cross-provider IMAP migration.
-* **Recommendation:** Let the script run uninterrupted in a background terminal session. If it drops, just re-run it—thanks to resume-logic, it picks up right where it stopped.
+* **Why does it take so long?** Major providers (like Google and Apple) enforce strict **IMAP Rate Limits (Throttling)** to prevent server overload. Every single folder and email header requires direct server-side verification.
+* **Universal Issue:** Folder encoding issues with mUTF-7 affect **all non-ASCII languages** (e.g., Spanish accents, French, German umlauts, etc.) and apply to almost any cross-provider IMAP migration.
+* **Recommendation:** Let the script run uninterrupted in a background terminal session. If it drops, re-run it—thanks to resume-logic, it picks up right where it stopped.
 
 ---
 
 ## 💡 Troubleshooting & AI Assistance
 
-If you encounter unexpected errors, missing modules, or server timeouts while running these scripts:
-* **Don't hesitate to use an AI (like Gemini or ChatGPT):** Paste the error message and the respective script into the chat. 
-* These scripts are intentionally written in a clean, modular, and compact format specifically so that AIs can easily read, debug, and adapt them for your individual mailbox structure within seconds.
+If you encounter unexpected errors, missing modules, or server timeouts:
+* Paste the error message and the respective script into an AI assistant.
+* These scripts are written in a clean, modular format so they can be easily debugged and adapted.
 
 ---
 
