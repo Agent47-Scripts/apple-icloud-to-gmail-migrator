@@ -76,3 +76,9 @@ python3 migrate_all.py
 
 * **Mac/System Sleep:** Ensure system sleep and display idle timeouts are disabled during execution, as unexpected system suspension can disrupt active IMAP streams.
 * **IMAP Throttling / Drops:** If Google briefly interrupts the connection (*"Upload interrupted. Reconnecting..."*), the built-in auto-retry mechanism will re-establish the socket automatically.
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License**. See the `LICENSE` file in the repository for full details.
