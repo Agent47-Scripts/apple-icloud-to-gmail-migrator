@@ -14,8 +14,8 @@ Description:
   
   Key Features:
   - Preserves original internal timestamps (INTERNALDATE) during transfer.
-  - Automatically handles custom IMAP folder structures.
-  - Robust exception handling for empty/special IMAP responses.
+  - Automatically handles custom IMAP folder structures and special characters (&).
+  - Robust exception handling for empty responses and duplicate folder creation.
   - Secure credential handling via system environment variables.
 ==============================================================================
 """
@@ -67,8 +67,14 @@ if status == "OK":
             print(f"  -> Failed to open folder on iCloud. Skipping.")
             continue
 
-        # Create corresponding target folder on Gmail
-        tgt.create(f'"{folder_name}"')
+        # Format folder name safely for Gmail IMAP (Escape unescaped '&' characters)
+        formatted_folder_name = folder_name.replace('&', '&-') if '&' in folder_name and '&-' not in folder_name else folder_name
+
+        # Create corresponding target folder on Gmail safely
+        try:
+            tgt.create(f'"{formatted_folder_name}"')
+        except Exception:
+            pass  # Folder might already exist or be created automatically
         
         # Search for all messages within the current folder
         search_status, msg_nums = src.search(None, "ALL")
@@ -100,7 +106,7 @@ if status == "OK":
 
             if raw_email:
                 try:
-                    tgt.append(f'"{folder_name}"', None, internal_date, raw_email)
+                    tgt.append(f'"{formatted_folder_name}"', None, internal_date, raw_email)
                 except Exception as e:
                     print(f"     Failed to append message: {e}")
 
