@@ -1,5 +1,7 @@
 # Apple iCloud Mail to Google Workspace Migration Tool
 
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Donate-orange.svg)](https://www.buymeacoffee.com/)
+
 A resilient, single-threaded Python tool designed to migrate email archives from Apple iCloud Mail to Google Workspace / Gmail via IMAP. 
 
 It preserves original message timestamps (`INTERNALDATE`), decodes mUTF-7 folder structures accurately, and implements auto-reconnect logic with duplicate prevention to handle server throttling reliably.
