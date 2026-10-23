@@ -4,6 +4,10 @@
 
 ---
 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/agent47.scripts)
+
+---
+
 ## 🚀 Key Features & Problem Solvers
 
 * **All-in-One Pipeline (`migrate_all.py`):** Handles synchronization, mUTF-7 duplicate purging, and historical timestamp fixing in a single, streamlined execution flow.
@@ -77,7 +81,3 @@ If you encounter unexpected errors, missing modules, or server timeouts:
 
 ## 📜 License
 Licensed under the [MIT License](LICENSE). Free to use, adapt, and share.
-
----
-
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/dein_buymeacoffee_agent47.scripts)
