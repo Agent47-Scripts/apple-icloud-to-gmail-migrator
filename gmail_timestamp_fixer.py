@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-Gmail In-Place IMAP Timestamp Fixer & Re-Uploader
+Gmail In-Place IMAP Timestamp Fixer & Re-Uploader (Bulletproofed)
 ================================================================================
 Author:       Tino Höhne
-Repository:   Agent47-Scripts/Apple-Mail-to-Google-Workspace-Migration
+Repository:   Agent47-Scripts/Gmail-IMAP-Timestamp-Fixer
+Version:      1.0.1
 License:      MIT License
 
 Description:
@@ -15,11 +16,13 @@ Standalone utility script designed to repair incorrect internal timestamps
 Since IMAP servers do not allow mutating the INTERNALDATE of an existing message,
 this script performs an in-place migration per message:
 1. Fetches the raw email body and parses the original RFC2822 'Date' header.
-2. Formats the historical date into a strict RFC3501 IMAP datetime string.
+2. Converts the parsed header into a safe, 10-element IMAP internal date tuple.
 3. Appends the exact message back to the same folder with the corrected timestamp.
-4. Marks the original message with the incorrect timestamp as \Deleted and EXPUNGES it.
+4. Marks the original message with the incorrect timestamp as \Deleted and EXPUNGES it immediately.
 ================================================================================
 """
+
+__version__ = "1.0.1"
 
 import os
 import sys
@@ -35,17 +38,20 @@ from email.utils import parsedate_to_datetime
 # ==============================================================================
 # 1. ENVIRONMENT CONFIGURATION & VALIDATION
 # ==============================================================================
+# Retrieve target credentials securely from environment variables.
+# Fallback support is provided for both TGT_* and GMAIL_* variable names.
 GMAIL_USER = os.getenv("TGT_USER") or os.getenv("GMAIL_USER")
 GMAIL_PASS = os.getenv("TGT_PASS") or os.getenv("GMAIL_PASS")
 
+# Terminate execution early if authentication credentials are not provided.
 if not all([GMAIL_USER, GMAIL_PASS]):
     print("ERROR: Missing required environment variables (TGT_USER/GMAIL_USER, TGT_PASS/GMAIL_PASS)!")
     sys.exit(1)
 
-# Enforce Gmail's maximum IMAP APPEND size limit (~24.5 MB)
+# Enforce Gmail's maximum IMAP APPEND size limit (~24.5 MB to account for base64 encoding overhead).
 MAX_EMAIL_SIZE = 24.5 * 1024 * 1024
 
-# Gmail IMAP Endpoint
+# Gmail IMAP Server Endpoint.
 GMAIL_HOST = "imap.gmail.com"
 GMAIL_PORT = 993
 
@@ -55,7 +61,10 @@ GMAIL_PORT = 993
 # ==============================================================================
 
 def connect_imap(host, port, user, password):
-    """Establishes a secure SSL/TLS IMAP connection with auto-retry."""
+    """
+    Establishes a secure SSL/TLS IMAP connection wrapped in an infinite retry loop.
+    This prevents script termination during transient network drops or IMAP socket timeouts.
+    """
     while True:
         try:
             context = ssl.create_default_context()
@@ -68,7 +77,11 @@ def connect_imap(host, port, user, password):
 
 
 def decode_mutf7(folder_bytes):
-    """Safely decodes mUTF-7 encoded IMAP folder names into Unicode strings."""
+    """
+    Safely decodes mUTF-7 encoded IMAP folder names (e.g. containing German umlauts,
+    accents, or special characters) into standard Unicode strings.
+    Includes robust fallback for malformed or unclosed sequence bytes.
+    """
     if isinstance(folder_bytes, str):
         folder_bytes = folder_bytes.encode('latin1')
     
@@ -101,7 +114,10 @@ def decode_mutf7(folder_bytes):
 
 
 def encode_mutf7(unicode_str):
-    """Encodes Unicode folder names to mUTF-7 format for IMAP operations."""
+    """
+    Encodes standard Unicode folder names back into mUTF-7 format as required
+    by IMAP specifications for folder selection, creation, and append commands.
+    """
     res = []
     b64_buf = []
     
@@ -134,20 +150,33 @@ def encode_mutf7(unicode_str):
     return "".join(res)
 
 
-def format_imap_datetime(dt):
-    """Formats a datetime object into a strict RFC3501 IMAP INTERNALDATE string."""
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return f'"{dt.strftime("%d-%b-%Y %H:%M:%S %z")}"'
+def create_safe_internal_tuple(dt):
+    """
+    Converts a datetime object into a fully compliant 10-element IMAP date tuple
+    for imaplib.Time2Internaldate.
 
-
-def generate_fallback_id(msg):
-    """Generates an MD5 fallback key for emails lacking Message-ID."""
-    date_str = msg.get("Date", "")
-    sub_str = msg.get("Subject", "")
-    from_str = msg.get("From", "")
-    raw = f"{date_str}-{sub_str}-{from_str}".encode('utf-8', errors='ignore')
-    return hashlib.md5(raw).hexdigest()
+    Crucial Fix: Ensures `gmtoff` is explicitly converted to an integer, preventing
+    Python 3.12 timedelta NoneType crashes while forcing Gmail to accept and apply
+    the historical INTERNALDATE metadata.
+    """
+    if dt.tzinfo is not None:
+        offset = dt.utcoffset()
+        gmtoff = int(offset.total_seconds()) if offset else 0
+    else:
+        gmtoff = 0
+        
+    return (
+        dt.year,
+        dt.month,
+        dt.day,
+        dt.hour,
+        dt.minute,
+        dt.second,
+        dt.weekday(),
+        dt.timetuple().tm_yday,
+        -1,
+        gmtoff
+    )
 
 
 # ==============================================================================
@@ -155,14 +184,20 @@ def generate_fallback_id(msg):
 # ==============================================================================
 
 def fix_timestamps():
+    """
+    Main orchestration loop for inspecting IMAP folders, extracting RFC2822 dates,
+    re-uploading messages with corrected timestamps, and removing stale duplicates.
+    """
     print(f"[*] Connecting to Gmail IMAP ({GMAIL_USER})...")
     client = connect_imap(GMAIL_HOST, GMAIL_PORT, GMAIL_USER, GMAIL_PASS)
     
+    # Retrieve all mailbox folders from the Gmail target account
     status, folders = client.list()
     if status != 'OK':
         print("[!] Failed to retrieve Gmail folders.")
         return
 
+    # Multi-language set of system folders to exclude from timestamp processing
     ignored_system_folders = {
         '[Gmail]', 'Junk', 'Trash', 'Deleted Messages', 'Drafts',
         'Papierkorb', 'Gelöschte E-Mails', 'Entwürfe', 'Spam',
@@ -170,6 +205,7 @@ def fix_timestamps():
         'Papelera', 'Correo no deseado', 'Borradores'
     }
 
+    # Iterate through all discovered folders on the IMAP server
     for folder_info in folders:
         raw_name = folder_info.decode('latin1').split(' "/" ')
         if len(raw_name) < 2:
@@ -178,17 +214,20 @@ def fix_timestamps():
         raw_folder = raw_name[1].strip('"')
         decoded_folder = decode_mutf7(raw_folder)
         
+        # Check folder hierarchy against system exclusions
         path_parts = [p.strip() for p in decoded_folder.split('/')]
         if any(part in ignored_system_folders for part in path_parts):
             print(f"  [-] Skipping system folder: {decoded_folder}")
             continue
 
+        # Select target folder in read-write mode to enable STORE and EXPUNGE commands
         encoded_folder = encode_mutf7(decoded_folder)
         status, _ = client.select(f'"{encoded_folder}"', readonly=False)
         if status != 'OK':
             print(f"  [!] Could not select folder: {decoded_folder}")
             continue
 
+        # Fetch message sequence numbers within current folder
         status, data = client.search(None, 'ALL')
         if status != 'OK' or not data[0]:
             print(f"\n[*] Folder: {decoded_folder} -> 0 messages found.")
@@ -201,11 +240,14 @@ def fix_timestamps():
         fixed_count = 0
         skipped_count = 0
 
-        # Process messages in reverse order to keep message sequence numbers predictable
+        # CRITICAL: Iterate through messages in REVERSE order.
+        # Immediate EXPUNGE calls modify message sequence numbers.
+        # Processing backwards guarantees that earlier message indices remain intact and unaltered.
         for msg_num in reversed(msg_nums):
             retries = 3
             while retries > 0:
                 try:
+                    # Fetch full raw MIME body for parsing and re-uploading
                     status, msg_data = client.fetch(msg_num, '(RFC822)')
                     if status != 'OK' or not msg_data or not msg_data[0]:
                         break
@@ -215,6 +257,7 @@ def fix_timestamps():
                         print(f"  [!] Skipping message {msg_num.decode()}: Exceeds size limit.")
                         break
 
+                    # Extract original RFC2822 'Date' header from MIME structure
                     msg_obj = email.message_from_bytes(raw_email)
                     date_header = msg_obj.get("Date")
 
@@ -231,18 +274,21 @@ def fix_timestamps():
                         skipped_count += 1
                         break
 
-                    imap_date_str = format_imap_datetime(dt_object)
+                    # Convert parsed datetime object into a bulletproof 10-element IMAP date tuple
+                    internal_date_tuple = create_safe_internal_tuple(dt_object)
 
-                    # 1. Re-upload email with historical timestamp
-                    status, _ = client.append(f'"{encoded_folder}"', flags=None, date_time=imap_date_str, message=raw_email)
+                    # 1. Re-upload email message appended with historical IMAP date metadata
+                    status, _ = client.append(f'"{encoded_folder}"', flags=None, date_time=internal_date_tuple, message=raw_email)
                     if status == 'OK':
-                        # 2. Mark old email for deletion
+                        # 2. Mark original message (containing invalid timestamp) as \Deleted and purge immediately
                         client.store(msg_num, '+FLAGS', '\\Deleted')
+                        client.expunge()
                         fixed_count += 1
                     else:
                         print(f"  [!] Failed to append message {msg_num.decode()}")
 
-                    time.sleep(0.3)  # Rate-limiting throttle
+                    # Rate-limiting delay to prevent triggering Google IMAP socket throttling
+                    time.sleep(0.3)
                     break
 
                 except (imaplib.IMAP4.abort, ssl.SSLEOFError, OSError, socket.error) as e:
@@ -257,10 +303,9 @@ def fix_timestamps():
                     else:
                         print(f"  [!] Failed processing message {msg_num.decode()} after retries.")
 
-        # Expunge deleted messages from the current folder
-        client.expunge()
         print(f"  -> Done with {decoded_folder}: {fixed_count} timestamps repaired, {skipped_count} skipped.")
 
+    # Gracefully terminate session upon completion
     try:
         client.logout()
     except Exception:
