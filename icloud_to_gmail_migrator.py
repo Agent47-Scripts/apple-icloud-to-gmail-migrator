@@ -185,7 +185,7 @@ def migrate():
         print("[!] Failed to list source folders.")
         return
 
-    # Nur reine System-Ordner ignorieren (keine Wörter wie 'Archiv', die in Nutzerordnern vorkommen können)
+    # Ignore only pure system folders (no generic words like 'Archive' that might appear in user folders)
     ignored_system_folders = {
         '[Gmail]', 'Junk', 'Trash', 'Deleted Messages', 'Drafts',
         'Papierkorb', 'Gelöschte E-Mails', 'Entwürfe', 'Spam',
@@ -207,7 +207,7 @@ def migrate():
         raw_folder = raw_name[1].strip('"')
         decoded_folder = decode_mutf7(raw_folder)
         
-        # Exakter Vergleich der Pfadsegmente (damit 'Mein Archiv' NICHT ignoriert wird)
+        # Exact comparison of path segments (ensuring custom folders containing words like 'Archive' are NOT ignored)
         path_parts = [p.strip() for p in decoded_folder.split('/')]
         if any(part in ignored_system_folders for part in path_parts):
             print(f"  [-] Ignoring system folder: {decoded_folder}")
