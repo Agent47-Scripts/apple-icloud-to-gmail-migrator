@@ -6,18 +6,18 @@ Apple iCloud Mail to Google Workspace / Gmail Migration Pipeline (Bulletproof)
 ================================================================================
 Author:       Tino Höhne
 Repository:   Agent47-Scripts/Apple-Mail-to-Google-Workspace-Migration
-Version:      1.0.0
+Version:      1.0.1
 License:      MIT License
 
 Description:
 Production-grade IMAP migration script featuring auto-reconnect logic, size limit 
 enforcement, mUTF-7 folder encoding/decoding fixes with safe byte handling, 
-robust fallback duplicate checking, and strict internal timestamp preservation 
-with guaranteed safety against Python 3.12 imaplib timedelta NoneType bugs.
+robust fallback duplicate checking, and native datetime timestamp preservation 
+fully compatible with Python 3.12 imaplib standards.
 ================================================================================
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 import os
 import sys
@@ -150,32 +150,6 @@ def encode_mutf7(unicode_str):
         res.append(flush_b64())
         
     return "".join(res)
-
-
-def create_safe_internal_tuple(dt):
-    """
-    Converts a datetime object into a fully compliant 10-element IMAP date tuple 
-    for imaplib.Time2Internaldate, ensuring gmtoff is an integer to prevent 
-    Python 3.12 timedelta NoneType crashes.
-    """
-    if dt.tzinfo is not None:
-        offset = dt.utcoffset()
-        gmtoff = int(offset.total_seconds()) if offset else 0
-    else:
-        gmtoff = 0
-        
-    return (
-        dt.year,
-        dt.month,
-        dt.day,
-        dt.hour,
-        dt.minute,
-        dt.second,
-        dt.weekday(),
-        dt.timetuple().tm_yday,
-        -1,
-        gmtoff
-    )
 
 
 # ==============================================================================
@@ -363,9 +337,6 @@ def migrate():
                     if not dt_object:
                         dt_object = datetime.now(timezone.utc)
 
-                    # Generate safe IMAP internal date tuple for append
-                    internal_date_tuple = create_safe_internal_tuple(dt_object)
-
                     # Duplicate verification via Message-ID or generated MD5 fallback hash
                     msg = email.message_from_bytes(raw_email)
                     raw_msg_id = msg.get("Message-ID")
@@ -378,9 +349,9 @@ def migrate():
                         skipped += 1
                         break
                         
-                    # Append message to Gmail target folder preserving timestamp
+                    # Append message to Gmail target folder preserving timestamp natively via Python 3.12 datetime support
                     encoded_target_folder = encode_mutf7(decoded_folder)
-                    tgt_client.append(f'"{encoded_target_folder}"', flags=None, date_time=internal_date_tuple, message=raw_email)
+                    tgt_client.append(f'"{encoded_target_folder}"', flags=None, date_time=dt_object, message=raw_email)
                     
                     existing_ids.add(msg_id)
                     uploaded += 1
