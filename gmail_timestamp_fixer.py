@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+r"""
 ================================================================================
-Gmail In-Place IMAP Timestamp Fixer & Re-Uploader (Bulletproofed)
+Gmail In-Place IMAP Timestamp Fixer & Re-Uploader (Bulletproof)
 ================================================================================
 Author:       Tino Höhne
 Repository:   Agent47-Scripts/Gmail-IMAP-Timestamp-Fixer
-Version:      1.0.1
+Version:      1.0.2
 License:      MIT License
 
 Description:
@@ -16,13 +16,13 @@ Standalone utility script designed to repair incorrect internal timestamps
 Since IMAP servers do not allow mutating the INTERNALDATE of an existing message,
 this script performs an in-place migration per message:
 1. Fetches the raw email body and parses the original RFC2822 'Date' header.
-2. Converts the parsed header into a safe, 10-element IMAP internal date tuple.
+2. Converts the parsed header into a native datetime object.
 3. Appends the exact message back to the same folder with the corrected timestamp.
 4. Marks the original message with the incorrect timestamp as \Deleted and EXPUNGES it immediately.
 ================================================================================
 """
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 import os
 import sys
@@ -150,35 +150,6 @@ def encode_mutf7(unicode_str):
     return "".join(res)
 
 
-def create_safe_internal_tuple(dt):
-    """
-    Converts a datetime object into a fully compliant 10-element IMAP date tuple
-    for imaplib.Time2Internaldate.
-
-    Crucial Fix: Ensures `gmtoff` is explicitly converted to an integer, preventing
-    Python 3.12 timedelta NoneType crashes while forcing Gmail to accept and apply
-    the historical INTERNALDATE metadata.
-    """
-    if dt.tzinfo is not None:
-        offset = dt.utcoffset()
-        gmtoff = int(offset.total_seconds()) if offset else 0
-    else:
-        gmtoff = 0
-        
-    return (
-        dt.year,
-        dt.month,
-        dt.day,
-        dt.hour,
-        dt.minute,
-        dt.second,
-        dt.weekday(),
-        dt.timetuple().tm_yday,
-        -1,
-        gmtoff
-    )
-
-
 # ==============================================================================
 # 3. TIMESTAMP FIXING PIPELINE
 # ==============================================================================
@@ -274,11 +245,8 @@ def fix_timestamps():
                         skipped_count += 1
                         break
 
-                    # Convert parsed datetime object into a bulletproof 10-element IMAP date tuple
-                    internal_date_tuple = create_safe_internal_tuple(dt_object)
-
-                    # 1. Re-upload email message appended with historical IMAP date metadata
-                    status, _ = client.append(f'"{encoded_folder}"', flags=None, date_time=internal_date_tuple, message=raw_email)
+                    # 1. Re-upload email message appended natively with Python 3.12 datetime support
+                    status, _ = client.append(f'"{encoded_folder}"', flags=None, date_time=dt_object, message=raw_email)
                     if status == 'OK':
                         # 2. Mark original message (containing invalid timestamp) as \Deleted and purge immediately
                         client.store(msg_num, '+FLAGS', '\\Deleted')
