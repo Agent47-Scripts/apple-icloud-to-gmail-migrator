@@ -321,6 +321,9 @@ def migrate():
                     
                     existing_ids.add(msg_id)
                     uploaded += 1
+                    
+                    # Short delay to prevent Google rate-limits and SSL resets during bulk uploads
+                    time.sleep(0.3)
                     break
                     
                 except (imaplib.IMAP4.abort, ssl.SSLEOFError, OSError, socket.error) as e:
