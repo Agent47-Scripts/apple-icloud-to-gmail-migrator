@@ -2,6 +2,8 @@
 
 > **Background & Purpose:** I created this all-in-one tool after going through the process of migrating an Apple Mail / iCloud IMAP archive to Google Workspace on Linux (Ubuntu Budgie). My goal is to save you time, trial-and-error, and frustrating roadblocks.
 
+---
+
 <p align="center">
   <a href="https://www.buymeacoffee.com/agent47.scripts" target="_blank" rel="noopener noreferrer">
     <img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee">
@@ -13,11 +15,10 @@
 ## 🚀 Key Features & Problem Solvers
 
 - **Cross-Platform Compatibility:** Runs natively on **Linux, macOS, and Windows (10/11)** without any third-party dependencies—uses standard Python libraries only.
-- **All-in-One Pipeline (`icloud_to_gmail_migrator_2.py`):** Handles synchronization, mUTF-7 duplicate purging, and historical timestamp fixing in a single, streamlined execution flow.
-- **Resumable & Fault-Tolerant:** Interrupted by an IMAP timeout or network drop? Simply re-run the script. It automatically detects existing messages via `Message-ID` checking and resumes exactly where it left off.
+- **All-in-One Pipeline (`icloud_to_gmail_migrator.py`):** Handles synchronization, mUTF-7 duplicate purging, and historical timestamp fixing in a single, streamlined execution flow.
+- **Resumable & Fault-Tolerant:** Interrupted by an IMAP timeout or network drop? Simply re-run the script or set `RESUME_FROM_FOLDER`. It automatically detects existing messages via `Message-ID` checking and resumes exactly where it left off.
 - **mUTF-7 Folder Encoding Fix:** Apple Mail uses specialized mUTF-7 encoding for non-ASCII characters and umlauts (`ä`, `ö`, `ü`, `ß`). Standard IMAP tools often create duplicated, corrupted folder trees, which are automatically cleaned up.
-- **Historical Timestamp Fixer:** Re-applies the original internal `Date:` header to historical emails, ensuring correct chronological order in the target web interface.
-- **Standalone In-Place Repair Tool Included:** Includes `gmail_timestamp_fixer.py` for repairing already imported mailboxes with wrong upload timestamps.
+- **Historical Timestamp Preservation:** Parses the original internal `Date:` header from email MIME bodies and passes strict RFC3501 `INTERNALDATE` strings during `APPEND`, ensuring correct chronological ordering in Gmail.
 - **Security First (No Hardcoded Credentials):** Credentials are passed strictly via system environment variables (`os.getenv`) — no hardcoded passwords in the source code.
 
 ---
@@ -54,7 +55,7 @@ export TGT_USER="your-email@gmail.com"
 export TGT_PASS="abcd1234efgh5678"
 
 # Run the pipeline
-python3 icloud_to_gmail_migrator_2.py
+python3 icloud_to_gmail_migrator.py
 ```
 
 ### Option B: Windows CMD (Command Prompt)
@@ -67,7 +68,7 @@ set TGT_USER=your-email@gmail.com
 set TGT_PASS=abcd1234efgh5678
 
 :: Run the pipeline
-python icloud_to_gmail_migrator_2.py
+python icloud_to_gmail_migrator.py
 ```
 
 ### Option C: Windows PowerShell
@@ -80,8 +81,20 @@ $env:TGT_USER="your-email@gmail.com"
 $env:TGT_PASS="abcd1234efgh5678"
 
 # Run the pipeline
-python icloud_to_gmail_migrator_2.py
+python icloud_to_gmail_migrator.py
 ```
+
+---
+
+## 🛠️ Post-Migration Timestamp Recovery (Edge Cases)
+
+### Real-World Experience & Server Timeouts
+Even though timestamp preservation is built directly into `icloud_to_gmail_migrator.py`, real-world testing shows that server-side glitches can still happen. If an IMAP session drops unexpectedly, or if you resume a migration after an interruption using `RESUME_FROM_FOLDER`, Gmail's IMAP servers may occasionally ignore the requested timestamp for specific folders and assign the current upload date instead.
+
+If you notice that certain folders or old emails ended up in Gmail with today's date:
+- You **do not need to re-run the entire migration from scratch**.
+- Use our dedicated recovery tool: [Gmail-IMAP-Timestamp-Fixer](https://github.com/Agent47-Scripts/Gmail-IMAP-Timestamp-Fixer) (or include `gmail_timestamp_fixer.py`).
+- It scans your target Gmail account, reads the true `Date:` header from affected emails, and updates their timestamps directly in Gmail.
 
 ---
 
@@ -97,22 +110,6 @@ In real-world tests across different hardware configurations under Linux, transf
   ~250 emails / ~200 MB per hour.
 - **Modern Portable Hardware (e.g., MacBook Pro under Linux):**
   ~2,000 emails / ~1.0 GB per hour.
-
----
-
-## 🛠️ Post-Migration Timestamp Recovery
-
-If you performed an IMAP migration in the past using a tool that did not preserve historical timestamps, your imported Gmail messages might all show today's import date.
-
-We have included a dedicated standalone recovery script: **`gmail_timestamp_fixer.py`**.
-- It connects directly to your Gmail account.
-- Reads the original RFC2822 `Date:` header embedded inside each email payload.
-- Re-uploads the message with its true original timestamp and removes the incorrectly dated duplicate.
-
-To run the repair script separately, set `TGT_USER` and `TGT_PASS` and run:
-```bash
-python3 gmail_timestamp_fixer.py
-```
 
 ---
 
