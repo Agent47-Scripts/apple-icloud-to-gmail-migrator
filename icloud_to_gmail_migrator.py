@@ -6,15 +6,18 @@ Apple iCloud Mail to Google Workspace / Gmail Migration Pipeline (Bulletproof)
 ================================================================================
 Author:       Tino Höhne
 Repository:   Agent47-Scripts/Apple-Mail-to-Google-Workspace-Migration
+Version:      1.0.0
 License:      MIT License
 
 Description:
 Production-grade IMAP migration script featuring auto-reconnect logic, size limit 
 enforcement, mUTF-7 folder encoding/decoding fixes with safe byte handling, 
 robust fallback duplicate checking, and strict internal timestamp preservation 
-using direct RFC3501 date strings to prevent Python 3.12 imaplib tuple crashes.
+with guaranteed safety against Python 3.12 imaplib timedelta NoneType bugs.
 ================================================================================
 """
+
+__version__ = "1.0.0"
 
 import os
 import sys
@@ -78,35 +81,36 @@ def decode_mutf7(folder_bytes):
     """
     Safely decodes mUTF-7 encoded IMAP folder names containing non-ASCII characters 
     (e.g., German umlauts, accents) into clean, standard Unicode strings.
-    Includes robust fallback handling for unclosed byte sequences.
+    Includes robust fallback handling for unclosed byte sequences and mixed types.
     """
-    if isinstance(folder_bytes, str):
-        folder_bytes = folder_bytes.encode('latin1')
+    if isinstance(folder_bytes, bytes):
+        folder_bytes = folder_bytes.decode('latin1', errors='ignore')
     
     res = []
     i = 0
     n = len(folder_bytes)
     while i < n:
-        if folder_bytes[i] == ord('&'):
-            j = folder_bytes.find(b'-', i)
+        if folder_bytes[i] == '&':
+            # Find the closing dash for modified UTF-7 sequence
+            j = folder_bytes.find('-', i)
             if j == -1:
-                res.append(folder_bytes[i:].decode('latin1', errors='ignore'))
+                res.append(folder_bytes[i:])
                 break
             if j == i + 1:
                 res.append('&')
             else:
-                b64 = folder_bytes[i+1:j].replace(b',', b'/')
-                pad = (-len(b64)) % 4
-                b64 += b'=' * pad
+                b64_part = folder_bytes[i+1:j].replace(',', '/')
+                pad = (-len(b64_part)) % 4
+                b64_part += '=' * pad
                 try:
                     import base64
-                    decoded = base64.b64decode(b64).decode('utf-16be')
+                    decoded = base64.b64decode(b64_part.encode('ascii')).decode('utf-16be')
                     res.append(decoded)
                 except Exception:
-                    res.append(folder_bytes[i:j+1].decode('latin1', errors='ignore'))
+                    res.append(folder_bytes[i:j+1])
             i = j + 1
         else:
-            res.append(chr(folder_bytes[i]))
+            res.append(str(folder_bytes[i]))
             i += 1
     return "".join(res)
 
@@ -146,6 +150,32 @@ def encode_mutf7(unicode_str):
         res.append(flush_b64())
         
     return "".join(res)
+
+
+def create_safe_internal_tuple(dt):
+    """
+    Converts a datetime object into a fully compliant 10-element IMAP date tuple 
+    for imaplib.Time2Internaldate, ensuring gmtoff is an integer to prevent 
+    Python 3.12 timedelta NoneType crashes.
+    """
+    if dt.tzinfo is not None:
+        offset = dt.utcoffset()
+        gmtoff = int(offset.total_seconds()) if offset else 0
+    else:
+        gmtoff = 0
+        
+    return (
+        dt.year,
+        dt.month,
+        dt.day,
+        dt.hour,
+        dt.minute,
+        dt.second,
+        dt.weekday(),
+        dt.timetuple().tm_yday,
+        -1,
+        gmtoff
+    )
 
 
 # ==============================================================================
@@ -303,41 +333,38 @@ def migrate():
                         print(f"  [!] Skipping message {msg_num}: Size exceeds Gmail IMAP limit.")
                         break
 
-                    # --- BULLETPROOF DIRECT STRING TIMESTAMP EXTRACTION ---
-                    imap_date_str = None
+                    # --- BULLETPROOF TIMESTAMP EXTRACTION ---
+                    dt_object = None
                     
-                    # 1. Try parsing RFC2822 'Date' header from email body first
+                    # 1. Try parsing native IMAP internal date from fetch response
                     try:
-                        msg_obj = email.message_from_bytes(raw_email)
-                        date_header = msg_obj.get("Date")
-                        if date_header:
-                            dt_object = parsedate_to_datetime(date_header)
-                            if dt_object:
-                                if dt_object.tzinfo is None:
-                                    dt_object = dt_object.replace(tzinfo=timezone.utc)
-                                imap_date_str = f'"{dt_object.strftime("%d-%b-%Y %H:%M:%S %z")}"'
+                        for response_part in msg_data:
+                            if isinstance(response_part, tuple):
+                                header_str = response_part[0].decode('utf-8', errors='ignore')
+                                if 'INTERNALDATE' in header_str:
+                                    time_tuple = imaplib.Internaldate2tuple(response_part[0])
+                                    if time_tuple:
+                                        dt_object = datetime.fromtimestamp(time.mktime(time_tuple), tz=timezone.utc)
+                                        break
                     except Exception:
                         pass
-
-                    # 2. Fallback: Try native IMAP internal date if header failed
-                    if not imap_date_str:
+                    
+                    # 2. Fallback: Parse RFC2822 'Date' header from email body
+                    if not dt_object:
                         try:
-                            for response_part in msg_data:
-                                if isinstance(response_part, tuple):
-                                    header_str = response_part[0].decode('utf-8', errors='ignore')
-                                    if 'INTERNALDATE' in header_str:
-                                        time_tuple = imaplib.Internaldate2tuple(response_part[0])
-                                        if time_tuple:
-                                            dt_object = datetime.fromtimestamp(time.mktime(time_tuple), tz=timezone.utc)
-                                            imap_date_str = f'"{dt_object.strftime("%d-%b-%Y %H:%M:%S %z")}"'
-                                            break
+                            msg_obj = email.message_from_bytes(raw_email)
+                            date_header = msg_obj.get("Date")
+                            if date_header:
+                                dt_object = parsedate_to_datetime(date_header)
                         except Exception:
                             pass
 
-                    # 3. Ultimate Fallback: Current UTC time string (Guaranteed never to crash)
-                    if not imap_date_str:
-                        now_utc = datetime.now(timezone.utc)
-                        imap_date_str = f'"{now_utc.strftime("%d-%b-%Y %H:%M:%S %z")}"'
+                    # 3. Ultimate Fallback: Current UTC time
+                    if not dt_object:
+                        dt_object = datetime.now(timezone.utc)
+
+                    # Generate safe IMAP internal date tuple for append
+                    internal_date_tuple = create_safe_internal_tuple(dt_object)
 
                     # Duplicate verification via Message-ID or generated MD5 fallback hash
                     msg = email.message_from_bytes(raw_email)
@@ -351,9 +378,9 @@ def migrate():
                         skipped += 1
                         break
                         
-                    # Append message to Gmail target folder using direct RFC3501 date string
+                    # Append message to Gmail target folder preserving timestamp
                     encoded_target_folder = encode_mutf7(decoded_folder)
-                    tgt_client.append(f'"{encoded_target_folder}"', flags=None, date_time=imap_date_str, message=raw_email)
+                    tgt_client.append(f'"{encoded_target_folder}"', flags=None, date_time=internal_date_tuple, message=raw_email)
                     
                     existing_ids.add(msg_id)
                     uploaded += 1
