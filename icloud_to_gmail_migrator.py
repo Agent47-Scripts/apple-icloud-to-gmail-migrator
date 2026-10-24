@@ -6,7 +6,7 @@ Apple iCloud Mail to Google Workspace / Gmail Migration Pipeline (Bulletproof)
 ================================================================================
 Author:       Tino Höhne
 Repository:   Agent47-Scripts/Apple-Mail-to-Google-Workspace-Migration
-Version:      1.0.1
+Version:      1.0.2
 License:      MIT License
 
 Description:
@@ -17,7 +17,7 @@ fully compatible with Python 3.12 imaplib standards.
 ================================================================================
 """
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 import os
 import sys
