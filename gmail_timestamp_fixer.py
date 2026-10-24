@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-r"""
+"""
 ================================================================================
 Gmail In-Place IMAP Timestamp Fixer & Re-Uploader (Bulletproof)
 ================================================================================
 Author:       Tino Höhne
 Repository:   Agent47-Scripts/Gmail-IMAP-Timestamp-Fixer
-Version:      1.0.2
+Version:      1.0.3
 License:      MIT License
 
 Description:
@@ -18,11 +18,11 @@ this script performs an in-place migration per message:
 1. Fetches the raw email body and parses the original RFC2822 'Date' header.
 2. Converts the parsed header into a native datetime object.
 3. Appends the exact message back to the same folder with the corrected timestamp.
-4. Marks the original message with the incorrect timestamp as \Deleted and EXPUNGES it immediately.
+4. Marks the original message with the incorrect timestamp as DELETED and EXPUNGES it immediately.
 ================================================================================
 """
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 import os
 import sys
@@ -248,7 +248,7 @@ def fix_timestamps():
                     # 1. Re-upload email message appended natively with Python 3.12 datetime support
                     status, _ = client.append(f'"{encoded_folder}"', flags=None, date_time=dt_object, message=raw_email)
                     if status == 'OK':
-                        # 2. Mark original message (containing invalid timestamp) as \Deleted and purge immediately
+                        # 2. Mark original message as \Deleted internally via IMAP command and purge immediately
                         client.store(msg_num, '+FLAGS', '\\Deleted')
                         client.expunge()
                         fixed_count += 1
