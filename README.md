@@ -93,7 +93,7 @@ Even though timestamp preservation is built directly into `icloud_to_gmail_migra
 
 If you notice that certain folders or old emails ended up in Gmail with today's date:
 - You **do not need to re-run the entire migration from scratch**.
-- Use our dedicated recovery tool: [Gmail-IMAP-Timestamp-Fixer](https://github.com/Agent47-Scripts/Gmail-IMAP-Timestamp-Fixer) (or include `gmail_timestamp_fixer.py`).
+- Use our dedicated recovery tool: [Gmail-IMAP-Timestamp-Fixer](https://github.com/Agent47-Scripts/Gmail-IMAP-Timestamp-Fixer).
 - It scans your target Gmail account, reads the true `Date:` header from affected emails, and updates their timestamps directly in Gmail.
 
 ---
