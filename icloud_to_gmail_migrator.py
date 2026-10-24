@@ -24,12 +24,16 @@ import email
 import hashlib
 from email.utils import parsedate_to_datetime
 
-# Retrieve credentials from environment variables
+# ==============================================================================
+# 1. ENVIRONMENT CONFIGURATION & VALIDATION
+# ==============================================================================
+# Retrieve credentials securely from environment variables
 SRC_USER = os.getenv("SRC_USER")
 SRC_PASS = os.getenv("SRC_PASS")
 TGT_USER = os.getenv("TGT_USER")
 TGT_PASS = os.getenv("TGT_PASS")
 
+# Validate that all required credentials are provided before proceeding
 if not all([SRC_USER, SRC_PASS, TGT_USER, TGT_PASS]):
     print("ERROR: Missing required environment variables (SRC_USER, SRC_PASS, TGT_USER, TGT_PASS)!")
     sys.exit(1)
@@ -40,14 +44,22 @@ RESUME_FROM_FOLDER = None
 # Limit for Gmail IMAP APPEND (approx 24.5 MB to be safe with encoding overhead)
 MAX_EMAIL_SIZE = 24.5 * 1024 * 1024
 
+# IMAP Server Endpoints
 SRC_HOST = "imap.mail.me.com"
 SRC_PORT = 993
 TGT_HOST = "imap.gmail.com"
 TGT_PORT = 993
 
 
+# ==============================================================================
+# 2. CONNECTION & PROTOCOL HELPER FUNCTIONS
+# ==============================================================================
+
 def connect_imap(host, port, user, password):
-    """Establishes SSL IMAP connection with automatic retry."""
+    """
+    Establishes an SSL-secured IMAP connection with an infinite retry loop 
+    to handle transient network drops or server-side timeouts.
+    """
     while True:
         try:
             context = ssl.create_default_context()
@@ -60,7 +72,10 @@ def connect_imap(host, port, user, password):
 
 
 def decode_mutf7(folder_bytes):
-    """Safely decodes mUTF-7 encoded IMAP folder names."""
+    """
+    Safely decodes mUTF-7 encoded IMAP folder names containing non-ASCII characters 
+    (e.g., German umlauts, Spanish/French accents) into standard Unicode strings.
+    """
     if isinstance(folder_bytes, str):
         folder_bytes = folder_bytes.encode('latin1')
     
@@ -93,7 +108,10 @@ def decode_mutf7(folder_bytes):
 
 
 def encode_mutf7(unicode_str):
-    """Encodes Unicode string to mUTF-7 for IMAP folder operations."""
+    """
+    Encodes standard Unicode folder names back into mUTF-7 format required 
+    by IMAP servers for folder creation, selection, and append operations.
+    """
     res = []
     b64_buf = []
     
@@ -126,8 +144,15 @@ def encode_mutf7(unicode_str):
     return "".join(res)
 
 
+# ==============================================================================
+# 3. DUPLICATE DETECTION & FOLDER MANAGEMENT
+# ==============================================================================
+
 def generate_fallback_id(msg):
-    """Generates MD5 hash fallback for emails lacking Message-ID."""
+    """
+    Generates a reliable MD5 hash fallback using Date, Subject, and From 
+    for emails that lack a standard RFC822 Message-ID header.
+    """
     date_str = msg.get("Date", "")
     sub_str = msg.get("Subject", "")
     from_str = msg.get("From", "")
@@ -136,7 +161,10 @@ def generate_fallback_id(msg):
 
 
 def get_target_existing_ids(tgt_client, tgt_folder):
-    """Fetches Message-IDs of already uploaded emails in target folder."""
+    """
+    Fetches Message-IDs (or fallback hashes) of emails already present 
+    in the target folder to prevent duplicate uploads during re-runs.
+    """
     encoded_folder = encode_mutf7(tgt_folder)
     status, _ = tgt_client.select(f'"{encoded_folder}"', readonly=True)
     if status != 'OK':
@@ -149,6 +177,7 @@ def get_target_existing_ids(tgt_client, tgt_folder):
     existing_ids = set()
     msg_nums = data[0].split()
     
+    # Process message headers in chunks of 100 to optimize IMAP performance
     for i in range(0, len(msg_nums), 100):
         chunk = b','.join(msg_nums[i:i+100])
         status, headers_data = tgt_client.fetch(chunk, '(BODY[HEADER.FIELDS (MESSAGE-ID DATE SUBJECT FROM)])')
@@ -166,12 +195,19 @@ def get_target_existing_ids(tgt_client, tgt_folder):
 
 
 def ensure_target_folder(tgt_client, tgt_folder):
-    """Ensures target IMAP folder exists."""
+    """
+    Ensures the target IMAP folder exists; creates it if it does not yet exist 
+    on the Google Workspace / Gmail account.
+    """
     encoded_folder = encode_mutf7(tgt_folder)
     status, _ = tgt_client.select(f'"{encoded_folder}"')
     if status != 'OK':
         tgt_client.create(f'"{encoded_folder}"')
 
+
+# ==============================================================================
+# 4. MAIN MIGRATION ORCHESTRATION PIPELINE
+# ==============================================================================
 
 def migrate():
     print(f"[*] Connecting to Apple iCloud IMAP ({SRC_USER})...")
@@ -180,12 +216,13 @@ def migrate():
     print(f"[*] Connecting to Gmail IMAP ({TGT_USER})...")
     tgt_client = connect_imap(TGT_HOST, TGT_PORT, TGT_USER, TGT_PASS)
     
+    # Retrieve all folders from the source iCloud account
     status, folders = src_client.list()
     if status != 'OK':
         print("[!] Failed to list source folders.")
         return
 
-    # Ignore only pure system folders (no generic words like 'Archive' that might appear in user folders)
+    # Define pure system folders to ignore (exact path segment matching prevents false positives on user archives)
     ignored_system_folders = {
         '[Gmail]', 'Junk', 'Trash', 'Deleted Messages', 'Drafts',
         'Papierkorb', 'Gelöschte E-Mails', 'Entwürfe', 'Spam',
@@ -199,6 +236,7 @@ def migrate():
     
     skip_mode = True if RESUME_FROM_FOLDER else False
 
+    # Iterate through every discovered folder on the source server
     for folder_info in folders:
         raw_name = folder_info.decode('latin1').split(' "/" ')
         if len(raw_name) < 2:
@@ -207,12 +245,13 @@ def migrate():
         raw_folder = raw_name[1].strip('"')
         decoded_folder = decode_mutf7(raw_folder)
         
-        # Exact comparison of path segments (ensuring custom folders containing words like 'Archive' are NOT ignored)
+        # Check path segments strictly so custom user folders containing words like 'Archive' are preserved
         path_parts = [p.strip() for p in decoded_folder.split('/')]
         if any(part in ignored_system_folders for part in path_parts):
             print(f"  [-] Ignoring system folder: {decoded_folder}")
             continue
             
+        # Handle resume logic if a specific starting folder was configured
         if skip_mode:
             if decoded_folder == RESUME_FROM_FOLDER:
                 skip_mode = False
@@ -222,6 +261,7 @@ def migrate():
             
         print(f"\n[*] Processing folder: {decoded_folder} (Raw IMAP: {raw_folder})")
         
+        # Select source folder in read-only mode to fetch messages safely
         status, _ = src_client.select(f'"{raw_folder}"', readonly=True)
         if status != 'OK':
             print(f"  [!] Could not select source folder {decoded_folder}")
@@ -236,22 +276,26 @@ def migrate():
         total_msgs = len(msg_nums)
         print(f"  -> Found {total_msgs} messages on source.")
         
+        # Prepare target folder and fetch existing message IDs to prevent duplicates
         ensure_target_folder(tgt_client, decoded_folder)
         existing_ids = get_target_existing_ids(tgt_client, decoded_folder)
         
         uploaded = 0
         skipped = 0
         
+        # Iterate through all messages in the current folder
         for msg_num in msg_nums:
             retries = 3
             while retries > 0:
                 try:
+                    # Fetch raw message body along with its original internal timestamp
                     status, msg_data = src_client.fetch(msg_num, '(RFC822 INTERNALDATE)')
                     if status != 'OK':
                         break
                         
                     raw_email = msg_data[0][1]
                     
+                    # Enforce Gmail's maximum email size restriction
                     if len(raw_email) > MAX_EMAIL_SIZE:
                         print(f"  [!] Skipping message {msg_num}: Size exceeds Gmail IMAP limit.")
                         break
@@ -259,16 +303,19 @@ def migrate():
                     internal_date = imaplib.Internaldate2tuple(msg_data[0][0])
                     msg = email.message_from_bytes(raw_email)
                     
+                    # Extract or generate unique Message-ID for duplicate checking
                     raw_msg_id = msg.get("Message-ID")
                     if raw_msg_id:
                         msg_id = str(raw_msg_id).strip()
                     else:
                         msg_id = generate_fallback_id(msg)
                     
+                    # Skip upload if the message already exists in the target folder
                     if msg_id in existing_ids:
                         skipped += 1
                         break
                         
+                    # Append message to target folder preserving original internal date
                     encoded_target_folder = encode_mutf7(decoded_folder)
                     tgt_client.append(f'"{encoded_target_folder}"', None, internal_date, raw_email)
                     
@@ -289,6 +336,7 @@ def migrate():
         
         print(f"  -> Done: {uploaded} uploaded, {skipped} skipped (already migrated).")
 
+    # Gracefully logout from both IMAP servers upon completion
     try:
         src_client.logout()
         tgt_client.logout()
