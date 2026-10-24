@@ -2,10 +2,8 @@
 
 > **Background & Purpose:** I created this all-in-one tool after going through the process of migrating an Apple Mail / iCloud IMAP archive to Google Workspace on Linux (Ubuntu Budgie). My goal is to save you time, trial-and-error, and frustrating roadblocks.
 
----
-
 <p align="center">
-  <a href="https://www.buymeacoffee.com/agent47.scripts">
+  <a href="https://www.buymeacoffee.com/agent47.scripts" target="_blank" rel="noopener noreferrer">
     <img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee">
   </a>
 </p>
@@ -14,6 +12,7 @@
 
 ## 🚀 Key Features & Problem Solvers
 
+- **Cross-Platform Compatibility:** Runs natively on **Linux, macOS, and Windows (10/11)** without any third-party dependencies—uses standard Python libraries only.
 - **All-in-One Pipeline (`icloud_to_gmail_migrator.py`):** Handles synchronization, mUTF-7 duplicate purging, and historical timestamp fixing in a single, streamlined execution flow.
 - **Resumable & Fault-Tolerant:** Interrupted by an IMAP timeout or network drop? Simply re-run the script. It automatically detects existing messages via `Message-ID` checking and resumes exactly where it left off.
 - **mUTF-7 Folder Encoding Fix:** Apple Mail uses specialized mUTF-7 encoding for non-ASCII characters and umlauts (`ä`, `ö`, `ü`, `ß`). Standard IMAP tools often create duplicated, corrupted folder trees, which are automatically cleaned up.
@@ -42,24 +41,45 @@ For security reasons, modern email providers do not allow standard account passw
 
 ## ⚙️ Usage
 
-### 1. Set Environment Variables
-Set your source and target credentials securely in your Linux terminal before running the script:
+Set your environment variables before running the script. Choose the commands matching your operating system:
+
+### Option A: Linux / macOS (Terminal)
 
 ```bash
-# Source Account (Apple iCloud - 19 chars with hyphens)
+# Set credentials (Source & Target)
 export SRC_USER="your-apple-id@icloud.com"
 export SRC_PASS="abcd-efgh-ijkl-mnop"
-
-# Target Account (Google Workspace / Gmail - 16 digits without spaces)
 export TGT_USER="your-email@gmail.com"
 export TGT_PASS="abcd1234efgh5678"
+
+# Run the pipeline
+python3 icloud_to_gmail_migrator.py
 ```
 
-### 2. Run the All-in-One Migration Pipeline
-Execute the main script to start the transfer, cleanup, and timestamp restoration:
+### Option B: Windows CMD (Command Prompt)
 
-```bash
-python3 icloud_to_gmail_migrator.py
+```cmd
+:: Set credentials (Source & Target)
+set SRC_USER=your-apple-id@icloud.com
+set SRC_PASS=abcd-efgh-ijkl-mnop
+set TGT_USER=your-email@gmail.com
+set TGT_PASS=abcd1234efgh5678
+
+:: Run the pipeline
+python icloud_to_gmail_migrator.py
+```
+
+### Option C: Windows PowerShell
+
+```powershell
+# Set credentials (Source & Target)
+$env:SRC_USER="your-apple-id@icloud.com"
+$env:SRC_PASS="abcd-efgh-ijkl-mnop"
+$env:TGT_USER="your-email@gmail.com"
+$env:TGT_PASS="abcd1234efgh5678"
+
+# Run the pipeline
+python icloud_to_gmail_migrator.py
 ```
 
 ---
@@ -72,9 +92,9 @@ Execution time varies significantly based on network rate-limiting and—crucial
 
 In real-world tests across different hardware configurations under Linux, transfer rates fluctuated widely:
 
-- **Slower Hardware / Suboptimal Driver Stack (e.g., Older Linux desktop setups/iMacs):**  
+- **Slower Hardware / Suboptimal Driver Stack (e.g., Older Linux desktop setups/iMacs):**
   ~250 emails / ~200 MB per hour.
-- **Modern Portable Hardware (e.g., MacBook Pro under Linux):**  
+- **Modern Portable Hardware (e.g., MacBook Pro under Linux):**
   ~2,000 emails / ~1.0 GB per hour.
 
 ### Why Does Hardware Impact Low-Level Terminal Scripts?
