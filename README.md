@@ -5,7 +5,7 @@
 ---
 
 <p align="center">
-  <a href="https://www.buymeacoffee.com/agent47.scripts" target="_blank" rel="noopener noreferrer">
+  <a href="https://www.buymeacoffee.com/agent47.scripts">
     <img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee">
   </a>
 </p>
@@ -27,13 +27,13 @@
 For security reasons, modern email providers do not allow standard account passwords for automated script access. You need **App-Specific Passwords**.
 
 ### Target Account (e.g., Google Workspace / Gmail)
-1. Go to your <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer">Google Account Settings</a> (**Security** -> **2-Step Verification** must be enabled).
-2. Direct link to generate: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Google App Passwords</a>.
+1. Go to your [Google Account Settings](https://myaccount.google.com/security) (**Security** -> **2-Step Verification** must be enabled).
+2. Direct link to generate: [Google App Passwords](https://myaccount.google.com/apppasswords).
 3. Create a new app password (named e.g. "IMAP Migration").
 4. Copy the **16-digit code** (without spaces/hyphens, e.g. `abcd1234efgh5678`).
 
 ### Source Account (e.g., Apple iCloud)
-1. Go to your <a href="https://appleid.apple.com/" target="_blank" rel="noopener noreferrer">Apple ID Account Management</a>.
+1. Go to your [Apple ID Account Management](https://appleid.apple.com/).
 2. Under **Sign-In and Security**, select **App-Specific Passwords**.
 3. Generate a password for this migration tool.
 4. Copy the **19-character code** (formatted in 4-character blocks separated by hyphens, e.g. `abcd-efgh-ijkl-mnop`).
@@ -64,14 +64,26 @@ python3 icloud_to_gmail_migrator.py
 
 ---
 
-## ⏱️ Execution Time & Performance Considerations
+## ⏱️ Performance Considerations & Hardware Impact
 
-Please be aware that IMAP operations on large historical email archives are **time-intensive**:
+Execution time varies significantly based on network rate-limiting and—crucially—the underlying **hardware and Linux kernel configuration**.
 
-- **Estimated Speed:** Expect roughly **1 to 3 hours per Gigabyte** (or per ~10,000 emails), depending on your account size and server limits.
-- **Why does it take so long?** Major providers (like Google and Apple) enforce strict **IMAP Rate Limits (Throttling)** to prevent server overload. Every single folder and email header requires direct server-side verification.
-- **Universal Issue:** Folder encoding issues with mUTF-7 affect **all non-ASCII languages** (e.g., Spanish accents, French, German umlauts, etc.) and apply to almost any cross-provider IMAP migration.
-- **Recommendation:** Let the script run uninterrupted in a background terminal session. If it drops, re-run it—thanks to resume-logic, it picks up right where it stopped.
+### Practical Benchmarks
+
+In real-world tests across different hardware configurations under Linux, transfer rates fluctuated widely:
+
+- **Slower Hardware / Suboptimal Driver Stack (e.g., Older Linux desktop setups/iMacs):**  
+  ~250 emails / ~200 MB per hour.
+- **Modern Portable Hardware (e.g., MacBook Pro under Linux):**  
+  ~2,000 emails / ~1.0 GB per hour.
+
+### Why Does Hardware Impact Low-Level Terminal Scripts?
+
+Though this Python script relies on proven, standard Linux CLI tools and low-level socket operations, execution speeds are heavily influenced by hardware architecture:
+
+1. **System & Driver Integration:** On legacy systems or machines running custom Linux setups with suboptimal network or power management drivers, standard low-level socket execution and TLS handshake cycles can suffer micro-delays.
+2. **Invisible in Web Browsing, Critical in Terminal:** While driver latency is completely unnoticeable during standard web browsing, low-level loops processing thousands of sequential socket writes, SSL encryption cycles, and string conversions directly amplify these hardware bottlenecks.
+3. **IMAP Rate Limits:** Regardless of speed, major providers enforce strict server-side throttling. The script incorporates throttle delays to prevent server connection drops.
 
 ---
 
@@ -84,4 +96,4 @@ If you encounter unexpected errors, missing modules, or server timeouts:
 ---
 
 ## 📜 License
-Licensed under the <a href="LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a>. Free to use, adapt, and share.
+Licensed under the [MIT License](LICENSE). Free to use, adapt, and share.
