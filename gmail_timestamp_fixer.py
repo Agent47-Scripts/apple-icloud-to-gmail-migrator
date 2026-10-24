@@ -2,27 +2,29 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-Gmail In-Place IMAP Timestamp Fixer & Re-Uploader (Bulletproof)
+Gmail In-Place IMAP Timestamp Fixer & Re-Uploader (Bulletproof Folder Preserver)
 ================================================================================
 Author:       Tino Höhne
 Repository:   Agent47-Scripts/Gmail-IMAP-Timestamp-Fixer
-Version:      1.0.3
+Version:      1.0.4
 License:      MIT License
 
 Description:
 Standalone utility script designed to repair incorrect internal timestamps
 (INTERNALDATE) on emails already uploaded to Gmail / Google Workspace.
 
-Since IMAP servers do not allow mutating the INTERNALDATE of an existing message,
-this script performs an in-place migration per message:
-1. Fetches the raw email body and parses the original RFC2822 'Date' header.
-2. Converts the parsed header into a native datetime object.
-3. Appends the exact message back to the same folder with the corrected timestamp.
-4. Marks the original message with the incorrect timestamp as DELETED and EXPUNGES it immediately.
+To strictly preserve Gmail labels and folder assignment, this script processes 
+messages folder-by-folder with robust quote escaping for apostrophes and special 
+characters:
+1. Iterates over all user-defined IMAP folders.
+2. Fetches raw email bodies and parses original RFC2822 'Date' headers.
+3. Converts parsed headers into native datetime objects.
+4. Appends exact messages back into the same folder with corrected timestamps.
+5. Marks original stale messages as DELETED and EXPUNGES them immediately.
 ================================================================================
 """
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 import os
 import sys
@@ -31,7 +33,6 @@ import socket
 import ssl
 import imaplib
 import email
-import hashlib
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
@@ -150,6 +151,15 @@ def encode_mutf7(unicode_str):
     return "".join(res)
 
 
+def escape_folder_for_imap(folder_name):
+    """
+    Safely escapes double quotes and backslashes in folder paths 
+    to prevent IMAP syntax errors on folders with apostrophes or quotes.
+    """
+    escaped = folder_name.replace('\\', '\\\\').replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 # ==============================================================================
 # 3. TIMESTAMP FIXING PIPELINE
 # ==============================================================================
@@ -191,9 +201,11 @@ def fix_timestamps():
             print(f"  [-] Skipping system folder: {decoded_folder}")
             continue
 
-        # Select target folder in read-write mode to enable STORE and EXPUNGE commands
+        # Safely escape and select target folder in read-write mode
         encoded_folder = encode_mutf7(decoded_folder)
-        status, _ = client.select(f'"{encoded_folder}"', readonly=False)
+        escaped_folder = escape_folder_for_imap(encoded_folder)
+        
+        status, _ = client.select(escaped_folder, readonly=False)
         if status != 'OK':
             print(f"  [!] Could not select folder: {decoded_folder}")
             continue
@@ -201,7 +213,7 @@ def fix_timestamps():
         # Fetch message sequence numbers within current folder
         status, data = client.search(None, 'ALL')
         if status != 'OK' or not data[0]:
-            print(f"\n[*] Folder: {decoded_folder} -> 0 messages found.")
+            print(f"[*] Folder: {decoded_folder} -> 0 messages found.")
             continue
 
         msg_nums = data[0].split()
@@ -213,7 +225,7 @@ def fix_timestamps():
 
         # CRITICAL: Iterate through messages in REVERSE order.
         # Immediate EXPUNGE calls modify message sequence numbers.
-        # Processing backwards guarantees that earlier message indices remain intact and unaltered.
+        # Processing backwards guarantees that earlier message indices remain intact.
         for msg_num in reversed(msg_nums):
             retries = 3
             while retries > 0:
@@ -245,15 +257,15 @@ def fix_timestamps():
                         skipped_count += 1
                         break
 
-                    # 1. Re-upload email message appended natively with Python 3.12 datetime support
-                    status, _ = client.append(f'"{encoded_folder}"', flags=None, date_time=dt_object, message=raw_email)
+                    # 1. Re-upload email message appended natively into exact folder to preserve labels
+                    status, _ = client.append(escaped_folder, flags=None, date_time=dt_object, message=raw_email)
                     if status == 'OK':
-                        # 2. Mark original message as \Deleted internally via IMAP command and purge immediately
+                        # 2. Mark original message as \Deleted internally and purge immediately
                         client.store(msg_num, '+FLAGS', '\\Deleted')
                         client.expunge()
                         fixed_count += 1
                     else:
-                        print(f"  [!] Failed to append message {msg_num.decode()}")
+                        print(f"  [!] Failed to append message {msg_num.decode()} to {decoded_folder}")
 
                     # Rate-limiting delay to prevent triggering Google IMAP socket throttling
                     time.sleep(0.3)
@@ -265,11 +277,11 @@ def fix_timestamps():
                         print(f"  [!] Connection interrupted ({e}). Reconnecting (Attempt {3-retries}/3)...")
                         try:
                             client = connect_imap(GMAIL_HOST, GMAIL_PORT, GMAIL_USER, GMAIL_PASS)
-                            client.select(f'"{encoded_folder}"', readonly=False)
+                            client.select(escaped_folder, readonly=False)
                         except Exception:
                             pass
                     else:
-                        print(f"  [!] Failed processing message {msg_num.decode()} after retries.")
+                        print(f"  [!] Failed processing message {msg_num.decode()} in {decoded_folder} after retries.")
 
         print(f"  -> Done with {decoded_folder}: {fixed_count} timestamps repaired, {skipped_count} skipped.")
 
